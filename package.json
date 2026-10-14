@@ -1,0 +1,20 @@
+{
+  "name": "allevents-scraper",
+  "version": "1.0.0",
+  "description": "Daily incremental event scraper for AllEvents.in",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "scrape": "node daily_scraper.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0",
+    "node-cron": "^4.6.0",
+    "playwright": "^1.64.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}
