@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AllEvents Scraper & Event Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+  <!-- Top Navbar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-bolt text-white text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            AllEvents Hub
+            <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Auto-Sync</span>
+          </h1>
+          <p class="text-xs text-slate-400">Daily Incremental Scraper & Direct Ticket Extractor</p>
+        </div>
+      </div>
+
+      <!-- Quick Badges & Scrape Button -->
+      <div class="flex items-center gap-3">
+        <div id="db-badge" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="db-name">Connecting...</span>
+        </div>
+
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300">
+          <i class="fa-solid fa-calendar-check text-indigo-400"></i>
+          <span id="total-count-badge">0 Events</span>
+        </div>
+
+        <button id="scrape-all-btn" onclick="triggerScrapeAll()" class="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white flex items-center gap-2 transition shadow-md shadow-indigo-600/20 disabled:opacity-50">
+          <i class="fa-solid fa-rotate" id="scrape-icon"></i>
+          <span>Scrape Now</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- Active Job Notification Banner (Hidden by default) -->
+    <div id="scraping-banner" class="hidden rounded-xl p-4 bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-700/50 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-circle-notch fa-spin text-indigo-400 text-xl"></i>
+        <div>
+          <p class="text-sm font-semibold text-white">Scraping in Progress...</p>
+          <p class="text-xs text-indigo-200">Checking listings and extracting direct ticketing links in background.</p>
+        </div>
+      </div>
+      <span class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full border border-indigo-500/30">Active</span>
+    </div>
+
+    <!-- Section 1: Target URLs to Scrape -->
+    <section class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-bullseye text-indigo-400"></i>
+            Target URLs to Scrape
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Add city or category pages (e.g. New Delhi, Mumbai, Parties, Concerts).</p>
+        </div>
+        <span id="targets-count" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg self-start sm:self-auto font-medium">
+          0 URLs
+        </span>
+      </div>
+
+      <!-- Add URL Input Form -->
+      <form onsubmit="handleAddNewTarget(event)" class="flex flex-col sm:flex-row gap-2 mb-4">
+        <div class="relative flex-1">
+          <i class="fa-solid fa-link absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+          <input 
+            type="url" 
+            id="new-url-input" 
+            placeholder="https://allevents.in/mumbai/all" 
+            required
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          >
+        </div>
+        <button type="submit" class="px-5 py-2 rounded-xl text-sm font-medium bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center gap-2 transition shadow-md shadow-emerald-600/20">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>Add URL</span>
+        </button>
+      </form>
+
+      <!-- Target URLs List -->
+      <div id="targets-list" class="space-y-2">
+        <div class="text-xs text-slate-400 py-3 text-center">Loading target URLs...</div>
+      </div>
+    </section>
+
+    <!-- Section 2: Scraped Events Explorer -->
+    <section class="space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-ticket text-indigo-400"></i>
+            Scraped Events & Direct Booking Links
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Stored in PostgreSQL with external ticket URLs (District, BookMyShow, etc.).</p>
+        </div>
+
+        <!-- Search & Filter Controls -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Search Box -->
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+            <input 
+              type="text" 
+              id="search-input" 
+              oninput="debounceSearch()" 
+              placeholder="Search event or venue..." 
+              class="bg-slate-800 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 sm:w-60"
+            >
+          </div>
+
+          <!-- Has Ticket Filter Toggle -->
+          <button 
+            id="ticket-filter-btn" 
+            onclick="toggleTicketFilter()" 
+            class="px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-1.5 transition"
+          >
+            <i class="fa-solid fa-arrow-up-right-from-square text-emerald-400"></i>
+            <span>Has External Ticket</span>
+          </button>
+
+          <!-- Refresh Button -->
+          <button onclick="loadEvents()" class="p-2 rounded-xl text-xs border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Events Grid -->
+      <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="col-span-full py-16 text-center text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin text-2xl text-indigo-400 mb-2"></i>
+          <p class="text-sm">Loading events from database...</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal for Raw Event Details -->
+  <div id="event-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+        <h3 id="modal-title" class="text-base font-bold text-white truncate">Event Details</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="p-4 overflow-y-auto space-y-4">
+        <pre id="modal-json" class="bg-slate-900 p-4 rounded-xl text-xs font-mono text-emerald-400 overflow-x-auto"></pre>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let filterHasTicket = false;
+    let searchTimeout = null;
+
+    // Initialize Dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchStatus();
+      loadTargets();
+      loadEvents();
+      // Poll status every 8 seconds
+      setInterval(fetchStatus, 8000);
+    });
+
+    // 1. Fetch System & DB Status
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        
+        // Update database badge
+        const dbBadge = document.getElementById('db-badge');
+        const dbName = document.getElementById('db-name');
+        dbBadge.classList.remove('hidden');
+        dbName.innerText = data.database;
+
+        document.getElementById('total-count-badge').innerText = `${data.total_events} Events`;
+
+        // Update scraping progress banner & icon
+        const banner = document.getElementById('scraping-banner');
+        const icon = document.getElementById('scrape-icon');
+        const btn = document.getElementById('scrape-all-btn');
+
+        if (data.is_scraping_now) {
+          banner.classList.remove('hidden');
+          icon.classList.add('fa-spin');
+          btn.disabled = true;
+          btn.classList.add('opacity-50');
+        } else {
+          banner.classList.add('hidden');
+          icon.classList.remove('fa-spin');
+          btn.disabled = false;
+          btn.classList.remove('opacity-50');
+        }
+      } catch (e) {
+        console.error('Status fetch error:', e);
+      }
+    }
+
+    // 2. Load Target URLs
+    async function loadTargets() {
+      try {
+        const res = await fetch('/api/targets');
+        const data = await res.json();
+        const targets = data.targets || [];
+        
+        document.getElementById('targets-count').innerText = `${targets.length} URL${targets.length === 1 ? '' : 's'}`;
+        const container = document.getElementById('targets-list');
+
+        if (targets.length === 0) {
+          container.innerHTML = '<div class="text-xs text-slate-500 py-3 text-center">No target URLs configured yet. Add one above!</div>';
+          return;
+        }
+
+        container.innerHTML = targets.map((url) => `
+          <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-700/60 hover:border-slate-600 transition gap-3">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <i class="fa-solid fa-arrow-trend-up text-indigo-400 text-xs"></i>
+              <a href="${url}" target="_blank" class="text-xs text-slate-200 hover:text-indigo-400 truncate font-mono">${url}</a>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button onclick="triggerScrapeSingle('${url}')" class="px-2.5 py-1 text-xs rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 flex items-center gap-1 transition">
+                <i class="fa-solid fa-play text-[10px]"></i>
+                <span class="hidden sm:inline">Scrape</span>
+              </button>
+              <button onclick="deleteTarget('${url}')" class="p-1.5 text-xs rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Target load error:', err);
+      }
+    }
+
+    // Add Target URL
+    async function handleAddNewTarget(e) {
+      e.preventDefault();
+      const input = document.getElementById('new-url-input');
+      const url = input.value.trim();
+      if (!url) return;
+
+      try {
+        const res = await fetch('/api/targets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (data.error) {
+          alert(data.error);
+        } else {
+          input.value = '';
+          loadTargets();
+        }
+      } catch (err) {
+        alert('Failed to add target URL');
+      }
+    }
+
+    // Delete Target URL
+    async function deleteTarget(url) {
+      if (!confirm(`Remove this URL from daily scraping?\n${url}`)) return;
+      try {
+        await fetch('/api/targets', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        loadTargets();
+      } catch (err) {
+        alert('Failed to remove URL');
+      }
+    }
+
+    // 3. Load Scraped Events
+    async function loadEvents() {
+      const container = document.getElementById('events-grid');
+      const search = document.getElementById('search-input').value.trim();
+
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (filterHasTicket) params.set('hasTicket', 'true');
+      params.set('limit', '100');
+
+      try {
+        const res = await fetch(`/api/events?${params.toString()}`);
+        const data = await res.json();
+        const events = data.events || [];
+
+        if (events.length === 0) {
+          container.innerHTML = `
+            <div class="col-span-full py-16 text-center text-slate-400">
+              <i class="fa-regular fa-calendar-xmark text-3xl text-slate-600 mb-2"></i>
+              <p class="text-sm font-medium">No events found matching your filter.</p>
+              <p class="text-xs text-slate-500 mt-1">Try clearing your search or hit "Scrape Now" to fetch new events.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = events.map((ev) => {
+          const banner = ev.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80';
+          const hasTicket = Boolean(ev.external_ticket_url);
+          const ticketUrl = ev.external_ticket_url || ev.url;
+          const tags = (ev.categories || ev.tags || []).slice(0, 3);
+
+          return `
+            <div class="bg-slate-800/80 border border-slate-700/70 rounded-2xl overflow-hidden flex flex-col hover:border-slate-600 transition shadow-lg group">
+              <!-- Event Banner -->
+              <div class="relative h-44 bg-slate-900 overflow-hidden">
+                <img src="${banner}" alt="${ev.name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="this.src='https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600&auto=format&fit=crop&q=80'">
+                ${hasTicket ? `
+                  <span class="absolute top-3 right-3 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500 text-white shadow-md flex items-center gap-1">
+                    <i class="fa-solid fa-ticket"></i> Direct Ticket
+                  </span>
+                ` : ''}
+              </div>
+
+              <!-- Event Details -->
+              <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                <div class="space-y-2">
+                  <div class="text-[11px] font-medium text-indigo-400 flex items-center gap-1.5">
+                    <i class="fa-regular fa-clock"></i>
+                    <span>${ev.startDate ? new Date(ev.startDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Date TBA'}</span>
+                  </div>
+
+                  <h3 class="text-base font-bold text-white line-clamp-2 hover:text-indigo-300 cursor-pointer" onclick='openModal(${JSON.stringify(ev).replace(/'/g, "&#39;")})'>
+                    ${ev.name}
+                  </h3>
+
+                  <p class="text-xs text-slate-400 flex items-start gap-1.5 line-clamp-1">
+                    <i class="fa-solid fa-location-dot mt-0.5 text-rose-400 text-xs"></i>
+                    <span>${ev.venue || ev.address || ev.city || 'Venue TBA'}</span>
+                  </p>
+                </div>
+
+                <!-- Tags / Categories -->
+                ${tags.length > 0 ? `
+                  <div class="flex flex-wrap gap-1.5">
+                    ${tags.map(t => `<span class="text-[10px] bg-slate-700/60 text-slate-300 px-2 py-0.5 rounded-md">#${t}</span>`).join('')}
+                  </div>
+                ` : ''}
+
+                <!-- Action Button -->
+                <div class="pt-2 border-t border-slate-700/50 flex items-center gap-2">
+                  <a 
+                    href="${ticketUrl}" 
+                    target="_blank" 
+                    class="flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ${hasTicket ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}"
+                  >
+                    <span>${hasTicket ? 'Book Tickets Directly' : 'View on AllEvents'}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                  </a>
+                  
+                  <button onclick='openModal(${JSON.stringify(ev).replace(/'/g, "&#39;")})' class="p-2 rounded-xl text-xs bg-slate-700/50 hover:bg-slate-700 text-slate-300" title="View Full Data">
+                    <i class="fa-solid fa-code"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (err) {
+        console.error('Events load error:', err);
+      }
+    }
+
+    // Trigger Scrapes
+    async function triggerScrapeAll() {
+      try {
+        const res = await fetch('/api/scrape-now', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Scraper started in background!');
+        fetchStatus();
+      } catch (err) {
+        alert('Failed to trigger scraper.');
+      }
+    }
+
+    async function triggerScrapeSingle(url) {
+      try {
+        const res = await fetch('/api/scrape-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        alert(data.message || 'Scraper started for this URL!');
+        fetchStatus();
+      } catch (err) {
+        alert('Failed to trigger scraper.');
+      }
+    }
+
+    // Toggle Filter
+    function toggleTicketFilter() {
+      filterHasTicket = !filterHasTicket;
+      const btn = document.getElementById('ticket-filter-btn');
+      if (filterHasTicket) {
+        btn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-500');
+        btn.classList.remove('bg-slate-800', 'text-slate-300');
+      } else {
+        btn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-500');
+        btn.classList.add('bg-slate-800', 'text-slate-300');
+      }
+      loadEvents();
+    }
+
+    // Search Debounce
+    function debounceSearch() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(loadEvents, 300);
+    }
+
+    // Modal
+    function openModal(eventObj) {
+      document.getElementById('modal-title').innerText = eventObj.name;
+      document.getElementById('modal-json').innerText = JSON.stringify(eventObj, null, 2);
+      document.getElementById('event-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('event-modal').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

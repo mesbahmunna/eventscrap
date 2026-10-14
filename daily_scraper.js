@@ -3,12 +3,12 @@ import stealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs/promises';
 import path from 'path';
 import { isSupabaseReady, getKnownEvents, upsertEvent } from './supabase.js';
+import { loadTargets } from './targets.js';
 
 // Enable stealth evasion
 chromium.use(stealthPlugin());
 
 // --- CONFIGURATION ---
-const TARGET_CITY_URL = process.env.SCRAPE_URL || 'https://allevents.in/new-delhi/all';
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve('./data');
 const DATA_FILE = path.join(DATA_DIR, 'events.json');
 const USER_DATA_DIR = path.join(DATA_DIR, 'user_data');
@@ -132,10 +132,17 @@ async function waitForCloudflare(page) {
   return false;
 }
 
-export async function runDailyScraper() {
+export async function runDailyScraper(specificUrls = null) {
+  let targetUrls = [];
+  if (specificUrls) {
+    targetUrls = Array.isArray(specificUrls) ? specificUrls : [specificUrls];
+  } else {
+    targetUrls = await loadTargets();
+  }
+
   console.log('='.repeat(65));
   console.log(` DAILY INCREMENTAL SCRAPER - ${new Date().toISOString()}`);
-  console.log(` Target: ${TARGET_CITY_URL}`);
+  console.log(` Target URLs (${targetUrls.length}):\n  - ${targetUrls.join('\n  - ')}`);
   console.log('='.repeat(65));
 
   await ensureDataDir();
@@ -190,42 +197,48 @@ export async function runDailyScraper() {
 
   const discoveredEvents = [];
 
-  // --- STEP 1: Check listing pages ---
-  for (let pageNum = 1; pageNum <= MAX_LISTING_PAGES; pageNum++) {
-    const url = pageNum === 1 ? TARGET_CITY_URL : `${TARGET_CITY_URL}?page=${pageNum}`;
-    console.log(`\n🔍 Checking listing [Page ${pageNum}]: ${url}`);
+  // --- STEP 1: Check listing pages for each target URL ---
+  for (const targetUrl of targetUrls) {
+    for (let pageNum = 1; pageNum <= MAX_LISTING_PAGES; pageNum++) {
+      const url = pageNum === 1 ? targetUrl : `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}page=${pageNum}`;
+      console.log(`\n🔍 Checking listing [Page ${pageNum}]: ${url}`);
 
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000 });
-    const passed = await waitForCloudflare(page);
-    if (!passed) {
-      console.warn('⚠️ Cloudflare verification took longer than expected.');
-    }
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000 });
+        const passed = await waitForCloudflare(page);
+        if (!passed) {
+          console.warn('⚠️ Cloudflare verification took longer than expected.');
+        }
 
-    await sleep(2000);
+        await sleep(2000);
 
-    const eventsOnPage = await page.evaluate(() => {
-      const results = [];
-      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-      for (const s of scripts) {
-        try {
-          const data = JSON.parse(s.textContent || '{}');
-          const list = Array.isArray(data) ? data : [data];
-          for (const item of list) {
-            if (item['@type'] === 'Event' && item.url) {
-              results.push({
-                name: item.name || '',
-                url: item.url,
-                startDate: item.startDate || ''
-              });
-            }
+        const eventsOnPage = await page.evaluate(() => {
+          const results = [];
+          const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+          for (const s of scripts) {
+            try {
+              const data = JSON.parse(s.textContent || '{}');
+              const list = Array.isArray(data) ? data : [data];
+              for (const item of list) {
+                if (item['@type'] === 'Event' && item.url) {
+                  results.push({
+                    name: item.name || '',
+                    url: item.url,
+                    startDate: item.startDate || ''
+                  });
+                }
+              }
+            } catch (e) {}
           }
-        } catch (e) {}
-      }
-      return results;
-    });
+          return results;
+        });
 
-    console.log(`   Found ${eventsOnPage.length} events listed on page ${pageNum}.`);
-    discoveredEvents.push(...eventsOnPage);
+        console.log(`   Found ${eventsOnPage.length} events listed on page ${pageNum}.`);
+        discoveredEvents.push(...eventsOnPage);
+      } catch (err) {
+        console.warn(`   ⚠️ Could not load listing ${url}: ${err.message}`);
+      }
+    }
   }
 
   // --- STEP 2: Filter for NEW events only ---
