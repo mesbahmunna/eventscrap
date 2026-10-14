@@ -8,31 +8,66 @@ dotenv.config();
 import { runDailyScraper, loadExistingEvents } from './daily_scraper.js';
 import { isSupabaseReady, fetchEventsFromSupabase, getKnownEvents } from './supabase.js';
 import { loadTargets, addTarget, removeTarget } from './targets.js';
+import { loadSettings, saveSettings } from './settings.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 4 * * *';
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
 let isScrapingRunning = false;
+let currentScrapingTarget = null;
 let lastScrapeResult = null;
+let activeCronJob = null;
 
-async function triggerScrapeJob(source = 'manual', specificUrls = null) {
+/**
+ * Applies or restarts the cron job dynamically
+ */
+async function applyCronSchedule() {
+  const settings = await loadSettings();
+
+  if (activeCronJob) {
+    activeCronJob.stop();
+    activeCronJob = null;
+    console.log('⏹️ Stopped previous cron schedule.');
+  }
+
+  if (settings.auto_scrape_enabled && settings.cron_expression) {
+    if (cron.validate(settings.cron_expression)) {
+      activeCronJob = cron.schedule(settings.cron_expression, () => {
+        console.log(`⏰ [CRON] Triggering scheduled scrape (${settings.cron_expression}) at ${new Date().toISOString()}...`);
+        triggerScrapeJob('cron_schedule');
+      });
+      console.log(`✅ Active Cron Job scheduled: "${settings.cron_expression}" (${settings.schedule_type})`);
+    } else {
+      console.warn(`⚠️ Invalid cron expression: "${settings.cron_expression}"`);
+    }
+  } else {
+    console.log('⏸️ Automatic scraping is currently DISABLED.');
+  }
+}
+
+/**
+ * Triggers scraper with locking
+ */
+async function triggerScrapeJob(source = 'manual', specificUrl = null) {
   if (isScrapingRunning) {
     return { status: 'already_running', message: 'A scrape task is currently in progress.' };
   }
 
   isScrapingRunning = true;
-  console.log(`🚀 Starting scraper job (triggered by: ${source})...`);
+  currentScrapingTarget = specificUrl || 'all';
+  console.log(`🚀 Starting scraper job for ${currentScrapingTarget} (triggered by: ${source})...`);
 
   try {
-    const result = await runDailyScraper(specificUrls);
+    const urlsToScrape = specificUrl ? [specificUrl] : null;
+    const result = await runDailyScraper(urlsToScrape);
     lastScrapeResult = {
       ...result,
       triggered_by: source,
+      target: currentScrapingTarget,
       completed_at: new Date().toISOString()
     };
     return lastScrapeResult;
@@ -42,19 +77,18 @@ async function triggerScrapeJob(source = 'manual', specificUrls = null) {
       status: 'error',
       error: err.message,
       triggered_by: source,
+      target: currentScrapingTarget,
       failed_at: new Date().toISOString()
     };
     return lastScrapeResult;
   } finally {
     isScrapingRunning = false;
+    currentScrapingTarget = null;
   }
 }
 
-// Scheduled Cron Job
-cron.schedule(CRON_SCHEDULE, () => {
-  console.log(`⏰ [CRON] Triggering scheduled daily scrape (${new Date().toISOString()})...`);
-  triggerScrapeJob('cron_schedule');
-});
+// Initialize Cron Schedule at startup
+applyCronSchedule();
 
 // --- API ENDPOINTS ---
 
@@ -74,6 +108,7 @@ app.get('/api/status', async (req, res) => {
   }
 
   const targets = await loadTargets();
+  const settings = await loadSettings();
 
   res.json({
     service: 'AllEvents Scraper Service (Railway + Supabase)',
@@ -81,11 +116,30 @@ app.get('/api/status', async (req, res) => {
     database: supaOnline ? 'Supabase PostgreSQL' : 'Local JSON Fallback',
     is_supabase_connected: supaOnline,
     is_scraping_now: isScrapingRunning,
-    cron_schedule: CRON_SCHEDULE,
+    current_scraping_target: currentScrapingTarget,
+    settings,
     total_events: totalEvents,
     targets_count: targets.length,
     last_scrape_run: lastScrapeResult
   });
+});
+
+/**
+ * Get / Update Automation Settings
+ */
+app.get('/api/settings', async (req, res) => {
+  const settings = await loadSettings();
+  res.json(settings);
+});
+
+app.post('/api/settings', async (req, res) => {
+  try {
+    const updated = await saveSettings(req.body);
+    await applyCronSchedule();
+    res.json({ success: true, settings: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /**
@@ -199,17 +253,15 @@ app.all(['/api/scrape', '/api/scrape-now'], (req, res) => {
   res.json({
     status: 'started',
     message: specificUrl
-      ? `Scraper started for ${specificUrl}`
-      : 'Scraper started for all target URLs.'
+      ? `Started scraping for ${specificUrl}`
+      : 'Started scraping for all target URLs.'
   });
 });
 
-// Explicitly send index.html for root path
 app.get('/', (req, res) => {
   res.sendFile(path.resolve('public/index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server listening on http://0.0.0.0:${PORT}`);
-  console.log(`⏰ Cron schedule active: "${CRON_SCHEDULE}"`);
 });

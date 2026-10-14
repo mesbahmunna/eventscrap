@@ -25,11 +25,11 @@
             AllEvents Hub
             <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Auto-Sync</span>
           </h1>
-          <p class="text-xs text-slate-400">Daily Incremental Scraper & Direct Ticket Extractor</p>
+          <p class="text-xs text-slate-400">Direct Ticket & Event Extractor</p>
         </div>
       </div>
 
-      <!-- Quick Badges & Scrape Button -->
+      <!-- Quick Badges & Scrape All Button -->
       <div class="flex items-center gap-3">
         <div id="db-badge" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 border border-slate-700 text-slate-300">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -43,7 +43,7 @@
 
         <button id="scrape-all-btn" onclick="triggerScrapeAll()" class="px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white flex items-center gap-2 transition shadow-md shadow-indigo-600/20 disabled:opacity-50">
           <i class="fa-solid fa-rotate" id="scrape-icon"></i>
-          <span>Scrape Now</span>
+          <span>Scrape All Now</span>
         </button>
       </div>
     </div>
@@ -52,34 +52,88 @@
   <!-- Main Container -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-    <!-- Active Job Notification Banner (Hidden by default) -->
+    <!-- Active Job Notification Banner -->
     <div id="scraping-banner" class="hidden rounded-xl p-4 bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border border-indigo-700/50 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <i class="fa-solid fa-circle-notch fa-spin text-indigo-400 text-xl"></i>
         <div>
           <p class="text-sm font-semibold text-white">Scraping in Progress...</p>
-          <p class="text-xs text-indigo-200">Checking listings and extracting direct ticketing links in background.</p>
+          <p id="scraping-target-text" class="text-xs text-indigo-200">Checking listings and extracting direct ticketing links in background.</p>
         </div>
       </div>
       <span class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-full border border-indigo-500/30">Active</span>
     </div>
 
-    <!-- Section 1: Target URLs to Scrape -->
+    <!-- SECTION 1: Automation & Schedule Controls (NEW) -->
+    <section class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-6 shadow-xl">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-700/50">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i>
+            Automatic Scraping Schedule
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">Toggle automatic background runs and set when you want it to scrape.</p>
+        </div>
+
+        <!-- Automatic Run Toggle Switch -->
+        <div class="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
+          <span class="text-xs font-semibold" id="toggle-label">Automatic Run: Enabled</span>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="auto-scrape-toggle" onchange="handleToggleChange()" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Schedule Configuration Form -->
+      <div id="schedule-options-container" class="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Frequency</label>
+          <select id="schedule-type-select" onchange="handleScheduleTypeChange()" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="daily">Daily at specific time</option>
+            <option value="every_6h">Every 6 Hours</option>
+            <option value="every_12h">Every 12 Hours</option>
+            <option value="custom">Custom Cron Expression</option>
+          </select>
+        </div>
+
+        <!-- Daily Time Picker -->
+        <div id="daily-time-block">
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Run Time (UTC / Server Time)</label>
+          <input type="time" id="schedule-time-input" value="04:00" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <!-- Custom Cron Input (hidden unless custom selected) -->
+        <div id="custom-cron-block" class="hidden">
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Cron Expression (e.g. 0 4 * * *)</label>
+          <input type="text" id="custom-cron-input" placeholder="0 4 * * *" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <button onclick="saveScheduleSettings()" class="w-full py-2 px-4 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20">
+            <i class="fa-solid fa-floppy-disk text-xs"></i>
+            <span>Save Schedule</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: Target URLs with Individual Run Buttons -->
     <section class="bg-slate-800/60 border border-slate-700/70 rounded-2xl p-6 shadow-xl">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
           <h2 class="text-base font-bold text-white flex items-center gap-2">
             <i class="fa-solid fa-bullseye text-indigo-400"></i>
-            Target URLs to Scrape
+            Target URLs (With Individual Run Buttons)
           </h2>
-          <p class="text-xs text-slate-400 mt-0.5">Add city or category pages (e.g. New Delhi, Mumbai, Parties, Concerts).</p>
+          <p class="text-xs text-slate-400 mt-0.5">Click <strong>"Run Scrape"</strong> on any specific URL to scrape only that city or category immediately.</p>
         </div>
         <span id="targets-count" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-lg self-start sm:self-auto font-medium">
           0 URLs
         </span>
       </div>
 
-      <!-- Add URL Input Form -->
+      <!-- Add URL Form -->
       <form onsubmit="handleAddNewTarget(event)" class="flex flex-col sm:flex-row gap-2 mb-4">
         <div class="relative flex-1">
           <i class="fa-solid fa-link absolute left-3.5 top-3 text-slate-400 text-sm"></i>
@@ -97,13 +151,13 @@
         </button>
       </form>
 
-      <!-- Target URLs List -->
-      <div id="targets-list" class="space-y-2">
+      <!-- Targets List with Clear Run Buttons -->
+      <div id="targets-list" class="space-y-2.5">
         <div class="text-xs text-slate-400 py-3 text-center">Loading target URLs...</div>
       </div>
     </section>
 
-    <!-- Section 2: Scraped Events Explorer -->
+    <!-- SECTION 3: Scraped Events & Direct Booking Links -->
     <section class="space-y-4">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -111,24 +165,24 @@
             <i class="fa-solid fa-ticket text-indigo-400"></i>
             Scraped Events & Direct Booking Links
           </h2>
-          <p class="text-xs text-slate-400 mt-0.5">Stored in PostgreSQL with external ticket URLs (District, BookMyShow, etc.).</p>
+          <p class="text-xs text-slate-400 mt-0.5">Stored in PostgreSQL with direct ticketing links (District, BookMyShow, etc.).</p>
         </div>
 
-        <!-- Search & Filter Controls -->
+        <!-- Filter Controls -->
         <div class="flex flex-wrap items-center gap-2">
-          <!-- Search Box -->
+          <!-- Search -->
           <div class="relative">
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
             <input 
               type="text" 
               id="search-input" 
               oninput="debounceSearch()" 
-              placeholder="Search event or venue..." 
+              placeholder="Search title or venue..." 
               class="bg-slate-800 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 sm:w-60"
             >
           </div>
 
-          <!-- Has Ticket Filter Toggle -->
+          <!-- Has Ticket Filter -->
           <button 
             id="ticket-filter-btn" 
             onclick="toggleTicketFilter()" 
@@ -138,7 +192,7 @@
             <span>Has External Ticket</span>
           </button>
 
-          <!-- Refresh Button -->
+          <!-- Refresh -->
           <button onclick="loadEvents()" class="p-2 rounded-xl text-xs border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300">
             <i class="fa-solid fa-arrows-rotate"></i>
           </button>
@@ -156,7 +210,7 @@
 
   </main>
 
-  <!-- Modal for Raw Event Details -->
+  <!-- Modal for Raw Event Data -->
   <div id="event-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
       <div class="p-4 border-b border-slate-700 flex items-center justify-between">
@@ -174,52 +228,141 @@
   <script>
     let filterHasTicket = false;
     let searchTimeout = null;
+    let currentScrapingTarget = null;
 
-    // Initialize Dashboard
     document.addEventListener('DOMContentLoaded', () => {
       fetchStatus();
+      loadSettingsUI();
       loadTargets();
       loadEvents();
-      // Poll status every 8 seconds
-      setInterval(fetchStatus, 8000);
+      setInterval(fetchStatus, 6000);
     });
 
-    // 1. Fetch System & DB Status
+    // 1. Fetch Status & Settings
     async function fetchStatus() {
       try {
         const res = await fetch('/api/status');
         const data = await res.json();
         
-        // Update database badge
-        const dbBadge = document.getElementById('db-badge');
-        const dbName = document.getElementById('db-name');
-        dbBadge.classList.remove('hidden');
-        dbName.innerText = data.database;
-
+        document.getElementById('db-badge').classList.remove('hidden');
+        document.getElementById('db-name').innerText = data.database;
         document.getElementById('total-count-badge').innerText = `${data.total_events} Events`;
 
-        // Update scraping progress banner & icon
         const banner = document.getElementById('scraping-banner');
+        const targetText = document.getElementById('scraping-target-text');
         const icon = document.getElementById('scrape-icon');
         const btn = document.getElementById('scrape-all-btn');
 
         if (data.is_scraping_now) {
           banner.classList.remove('hidden');
+          currentScrapingTarget = data.current_scraping_target;
+          targetText.innerText = currentScrapingTarget === 'all'
+            ? 'Scraping all target URLs...'
+            : `Currently scraping: ${currentScrapingTarget}`;
           icon.classList.add('fa-spin');
           btn.disabled = true;
           btn.classList.add('opacity-50');
         } else {
           banner.classList.add('hidden');
+          currentScrapingTarget = null;
           icon.classList.remove('fa-spin');
           btn.disabled = false;
           btn.classList.remove('opacity-50');
         }
+
+        // Re-render targets to update any individual active button spinners
+        updateTargetRunButtons();
       } catch (e) {
-        console.error('Status fetch error:', e);
+        console.error('Status error:', e);
       }
     }
 
-    // 2. Load Target URLs
+    // 2. Automation / Schedule Settings
+    async function loadSettingsUI() {
+      try {
+        const res = await fetch('/api/settings');
+        const settings = await res.json();
+
+        const toggle = document.getElementById('auto-scrape-toggle');
+        const label = document.getElementById('toggle-label');
+        const container = document.getElementById('schedule-options-container');
+
+        toggle.checked = Boolean(settings.auto_scrape_enabled);
+        label.innerText = toggle.checked ? 'Automatic Run: Enabled' : 'Automatic Run: Disabled';
+        container.style.opacity = toggle.checked ? '1' : '0.4';
+        container.style.pointerEvents = toggle.checked ? 'auto' : 'none';
+
+        document.getElementById('schedule-type-select').value = settings.schedule_type || 'daily';
+        document.getElementById('schedule-time-input').value = settings.schedule_time || '04:00';
+        document.getElementById('custom-cron-input').value = settings.cron_expression || '0 4 * * *';
+
+        handleScheduleTypeChange();
+      } catch (err) {
+        console.error('Settings load error:', err);
+      }
+    }
+
+    function handleToggleChange() {
+      const toggle = document.getElementById('auto-scrape-toggle');
+      const label = document.getElementById('toggle-label');
+      const container = document.getElementById('schedule-options-container');
+
+      label.innerText = toggle.checked ? 'Automatic Run: Enabled' : 'Automatic Run: Disabled';
+      container.style.opacity = toggle.checked ? '1' : '0.4';
+      container.style.pointerEvents = toggle.checked ? 'auto' : 'none';
+
+      // Auto-save toggle status immediately
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_scrape_enabled: toggle.checked })
+      });
+    }
+
+    function handleScheduleTypeChange() {
+      const type = document.getElementById('schedule-type-select').value;
+      const dailyBlock = document.getElementById('daily-time-block');
+      const customBlock = document.getElementById('custom-cron-block');
+
+      if (type === 'daily') {
+        dailyBlock.classList.remove('hidden');
+        customBlock.classList.add('hidden');
+      } else if (type === 'custom') {
+        dailyBlock.classList.add('hidden');
+        customBlock.classList.remove('hidden');
+      } else {
+        dailyBlock.classList.add('hidden');
+        customBlock.classList.add('hidden');
+      }
+    }
+
+    async function saveScheduleSettings() {
+      const auto_scrape_enabled = document.getElementById('auto-scrape-toggle').checked;
+      const schedule_type = document.getElementById('schedule-type-select').value;
+      const schedule_time = document.getElementById('schedule-time-input').value;
+      const cron_expression = document.getElementById('custom-cron-input').value;
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            auto_scrape_enabled,
+            schedule_type,
+            schedule_time,
+            cron_expression
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ Schedule updated successfully!');
+        }
+      } catch (err) {
+        alert('Failed to update schedule');
+      }
+    }
+
+    // 3. Load Targets with RUN Button on Each
     async function loadTargets() {
       try {
         const res = await fetch('/api/targets');
@@ -230,33 +373,58 @@
         const container = document.getElementById('targets-list');
 
         if (targets.length === 0) {
-          container.innerHTML = '<div class="text-xs text-slate-500 py-3 text-center">No target URLs configured yet. Add one above!</div>';
+          container.innerHTML = '<div class="text-xs text-slate-500 py-3 text-center">No target URLs configured. Add one above!</div>';
           return;
         }
 
         container.innerHTML = targets.map((url) => `
-          <div class="flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-700/60 hover:border-slate-600 transition gap-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-700/60 hover:border-slate-600 transition gap-3">
             <div class="flex items-center gap-2.5 min-w-0">
-              <i class="fa-solid fa-arrow-trend-up text-indigo-400 text-xs"></i>
+              <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></span>
               <a href="${url}" target="_blank" class="text-xs text-slate-200 hover:text-indigo-400 truncate font-mono">${url}</a>
             </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <button onclick="triggerScrapeSingle('${url}')" class="px-2.5 py-1 text-xs rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 flex items-center gap-1 transition">
+
+            <!-- Action Buttons for this specific URL -->
+            <div class="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+              <button 
+                id="btn-run-${encodeURIComponent(url)}" 
+                onclick="triggerScrapeSingle('${url}')" 
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center gap-1.5 transition shadow-sm"
+              >
                 <i class="fa-solid fa-play text-[10px]"></i>
-                <span class="hidden sm:inline">Scrape</span>
+                <span>Run Scrape</span>
               </button>
-              <button onclick="deleteTarget('${url}')" class="p-1.5 text-xs rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition">
+
+              <button onclick="deleteTarget('${url}')" class="p-1.5 text-xs rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition" title="Delete URL">
                 <i class="fa-solid fa-trash-can"></i>
               </button>
             </div>
           </div>
         `).join('');
+
+        updateTargetRunButtons();
       } catch (err) {
         console.error('Target load error:', err);
       }
     }
 
-    // Add Target URL
+    function updateTargetRunButtons() {
+      const buttons = document.querySelectorAll('[id^="btn-run-"]');
+      buttons.forEach(btn => {
+        const url = decodeURIComponent(btn.id.replace('btn-run-', ''));
+        if (currentScrapingTarget === url) {
+          btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-xs"></i> <span>Running...</span>';
+          btn.disabled = true;
+          btn.classList.add('opacity-50');
+        } else {
+          btn.innerHTML = '<i class="fa-solid fa-play text-[10px]"></i> <span>Run Scrape</span>';
+          btn.disabled = Boolean(currentScrapingTarget);
+          if (currentScrapingTarget) btn.classList.add('opacity-50');
+          else btn.classList.remove('opacity-50');
+        }
+      });
+    }
+
     async function handleAddNewTarget(e) {
       e.preventDefault();
       const input = document.getElementById('new-url-input');
@@ -281,9 +449,8 @@
       }
     }
 
-    // Delete Target URL
     async function deleteTarget(url) {
-      if (!confirm(`Remove this URL from daily scraping?\n${url}`)) return;
+      if (!confirm(`Remove this URL from target list?\n${url}`)) return;
       try {
         await fetch('/api/targets', {
           method: 'DELETE',
@@ -296,7 +463,7 @@
       }
     }
 
-    // 3. Load Scraped Events
+    // 4. Load Scraped Events
     async function loadEvents() {
       const container = document.getElementById('events-grid');
       const search = document.getElementById('search-input').value.trim();
@@ -316,7 +483,7 @@
             <div class="col-span-full py-16 text-center text-slate-400">
               <i class="fa-regular fa-calendar-xmark text-3xl text-slate-600 mb-2"></i>
               <p class="text-sm font-medium">No events found matching your filter.</p>
-              <p class="text-xs text-slate-500 mt-1">Try clearing your search or hit "Scrape Now" to fetch new events.</p>
+              <p class="text-xs text-slate-500 mt-1">Try clearing your search or click "Run Scrape" on a target URL.</p>
             </div>
           `;
           return;
@@ -330,7 +497,7 @@
 
           return `
             <div class="bg-slate-800/80 border border-slate-700/70 rounded-2xl overflow-hidden flex flex-col hover:border-slate-600 transition shadow-lg group">
-              <!-- Event Banner -->
+              <!-- Banner -->
               <div class="relative h-44 bg-slate-900 overflow-hidden">
                 <img src="${banner}" alt="${ev.name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" onerror="this.src='https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600&auto=format&fit=crop&q=80'">
                 ${hasTicket ? `
@@ -340,7 +507,7 @@
                 ` : ''}
               </div>
 
-              <!-- Event Details -->
+              <!-- Details -->
               <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
                 <div class="space-y-2">
                   <div class="text-[11px] font-medium text-indigo-400 flex items-center gap-1.5">
@@ -358,14 +525,14 @@
                   </p>
                 </div>
 
-                <!-- Tags / Categories -->
+                <!-- Tags -->
                 ${tags.length > 0 ? `
                   <div class="flex flex-wrap gap-1.5">
                     ${tags.map(t => `<span class="text-[10px] bg-slate-700/60 text-slate-300 px-2 py-0.5 rounded-md">#${t}</span>`).join('')}
                   </div>
                 ` : ''}
 
-                <!-- Action Button -->
+                <!-- Actions -->
                 <div class="pt-2 border-t border-slate-700/50 flex items-center gap-2">
                   <a 
                     href="${ticketUrl}" 
@@ -395,7 +562,7 @@
       try {
         const res = await fetch('/api/scrape-now', { method: 'POST' });
         const data = await res.json();
-        alert(data.message || 'Scraper started in background!');
+        alert(data.message || 'Scraper started for all target URLs in background!');
         fetchStatus();
       } catch (err) {
         alert('Failed to trigger scraper.');
@@ -410,14 +577,13 @@
           body: JSON.stringify({ url })
         });
         const data = await res.json();
-        alert(data.message || 'Scraper started for this URL!');
+        alert(data.message || `Scraper started for: ${url}`);
         fetchStatus();
       } catch (err) {
         alert('Failed to trigger scraper.');
       }
     }
 
-    // Toggle Filter
     function toggleTicketFilter() {
       filterHasTicket = !filterHasTicket;
       const btn = document.getElementById('ticket-filter-btn');
@@ -431,13 +597,11 @@
       loadEvents();
     }
 
-    // Search Debounce
     function debounceSearch() {
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(loadEvents, 300);
     }
 
-    // Modal
     function openModal(eventObj) {
       document.getElementById('modal-title').innerText = eventObj.name;
       document.getElementById('modal-json').innerText = JSON.stringify(eventObj, null, 2);
